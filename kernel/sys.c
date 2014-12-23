@@ -2354,15 +2354,24 @@ SYSCALL_DEFINE5(prctl, int, option, unsigned long, arg2, unsigned long, arg3,
 				return -EINVAL;
 			current->flags &= ~PF_MCE_PROCESS;
 			break;
-		case PR_MCE_KILL_SET:
-			current->flags |= PF_MCE_PROCESS;
-			if (arg3 == PR_MCE_KILL_EARLY)
-				current->flags |= PF_MCE_EARLY;
-			else if (arg3 == PR_MCE_KILL_LATE)
-				current->flags &= ~PF_MCE_EARLY;
-			else if (arg3 == PR_MCE_KILL_DEFAULT)
-				current->flags &=
-						~(PF_MCE_EARLY|PF_MCE_PROCESS);
+		case PR_SET_VMA:
+			error = prctl_set_vma(arg2, arg3, arg4, arg5);
+			break;
+		case PR_SET_TIMERSLACK_PID:
+			if (task_pid_vnr(current) != (pid_t)arg3 &&
+					!capable(CAP_SYS_NICE))
+				return -EPERM;
+			rcu_read_lock();
+			tsk = find_task_by_vpid((pid_t)arg3);
+			if (tsk == NULL) {
+				rcu_read_unlock();
+				return -EINVAL;
+			}
+			get_task_struct(tsk);
+			rcu_read_unlock();
+			if (arg2 <= 0)
+				tsk->timer_slack_ns =
+					tsk->default_timer_slack_ns;
 			else
 				return -EINVAL;
 			break;
