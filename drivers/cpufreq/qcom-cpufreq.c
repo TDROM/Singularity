@@ -1,4 +1,6 @@
-/* drivers/cpufreq/qcom-cpufreq.c
+
+ 
+   /* drivers/cpufreq/qcom-cpufreq.c
  *
  * MSM architecture cpufreq driver
  *
@@ -852,7 +854,6 @@ void c1_cpufreq_limit_queue(void)
 		queue_work(qos_cpufreq_work_queue, &c1_cpufreq_limit_work);
 }
 EXPORT_SYMBOL_GPL(c1_cpufreq_limit_queue);
-#endif
 
 static int __init msm_cpufreq_register(void)
 {
