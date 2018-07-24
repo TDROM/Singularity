@@ -32,6 +32,8 @@ unsigned long boosted_cpu_util(int cpu);
 #define EUGOV_KTHREAD_PRIORITY	50
 #define DEFAULT_SUSPEND_MAX_FREQ 0
 #define DEFAULT_SUSPEND_CAPACITY_FACTOR 10
+#define DEFAULT_UP_RATE_LIMIT_US 1000
+#define DEFAULT_DOWN_RATE_LIMIT_US 20000
 
 struct eugov_tunables {
 	struct gov_attr_set attr_set;
