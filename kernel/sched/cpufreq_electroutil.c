@@ -91,6 +91,7 @@ struct eugov_cpu {
 };
 
 static DEFINE_PER_CPU(struct eugov_cpu, eugov_cpu);
+static DEFINE_PER_CPU(struct eugov_tunables *, cached_tunables);
 
 /************************ Governor internals ***********************/
 
@@ -671,8 +672,6 @@ static struct attribute *eugov_attributes[] = {
 	&up_rate_limit_us.attr,
 	&down_rate_limit_us.attr,
 	&iowait_boost_enable.attr,
-	&silver_suspend_max_freq.attr,
-	&gold_suspend_max_freq.attr,
 	&suspend_capacity_factor.attr,
 	NULL
 };
@@ -768,6 +767,30 @@ static struct eugov_tunables *eugov_tunables_alloc(struct eugov_policy *eg_polic
 	return tunables;
 }
 
+static void eugov_tunables_save(struct cpufreq_policy *policy,
+		struct eugov_tunables *tunables)
+{
+	int cpu;
+	struct eugov_tunables *cached = per_cpu(cached_tunables, policy->cpu);
+
+	if (!have_governor_per_policy())
+		return;
+
+	if (!cached) {
+		cached = kzalloc(sizeof(*tunables), GFP_KERNEL);
+		if (!cached) {
+			pr_warn("Couldn't allocate tunables for caching\n");
+			return;
+		}
+		for_each_cpu(cpu, policy->related_cpus)
+			per_cpu(cached_tunables, cpu) = cached;
+	}
+
+	cached->up_rate_limit_us = tunables->up_rate_limit_us;
+	cached->down_rate_limit_us = tunables->down_rate_limit_us;
+}
+
+
 static void eugov_tunables_free(struct eugov_tunables *tunables)
 {
 	if (!have_governor_per_policy())
@@ -775,6 +798,26 @@ static void eugov_tunables_free(struct eugov_tunables *tunables)
 
 	kfree(tunables);
 }
+
+static void eugov_tunables_restore(struct cpufreq_policy *policy)
+{
+	struct eugov_policy *eg_policy = policy->governor_data;
+	struct eugov_tunables *tunables = eg_policy->tunables;
+	struct eugov_tunables *cached = per_cpu(cached_tunables, policy->cpu);
+
+	if (!cached)
+		return;
+
+	tunables->up_rate_limit_us = cached->up_rate_limit_us;
+	tunables->down_rate_limit_us = cached->down_rate_limit_us;
+	eg_policy->up_rate_delay_ns =
+		tunables->up_rate_limit_us * NSEC_PER_USEC;
+	eg_policy->down_rate_delay_ns =
+		tunables->down_rate_limit_us * NSEC_PER_USEC;
+	eg_policy->min_rate_limit_ns = min(eg_policy->up_rate_delay_ns,
+					   eg_policy->down_rate_delay_ns);
+}
+
 
 static int eugov_init(struct cpufreq_policy *policy)
 {
@@ -842,6 +885,8 @@ static int eugov_init(struct cpufreq_policy *policy)
 	policy->governor_data = eg_policy;
 	eg_policy->tunables = tunables;
 
+	eugov_tunables_restore(policy);
+
 	ret = kobject_init_and_add(&tunables->attr_set.kobj, &eugov_tunables_ktype,
 				   get_governor_parent_kobj(policy), "%s",
 				   cpufreq_gov_electroutil.name);
@@ -882,6 +927,7 @@ static int eugov_exit(struct cpufreq_policy *policy)
 	count = gov_attr_set_put(&tunables->attr_set, &eg_policy->tunables_hook);
 	policy->governor_data = NULL;
 	if (!count)
+		eugov_tunables_save(policy, tunables);
 		eugov_tunables_free(tunables);
 
 	mutex_unlock(&global_tunables_lock);
