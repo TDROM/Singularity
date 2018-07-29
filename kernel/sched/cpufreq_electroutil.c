@@ -671,6 +671,8 @@ static struct attribute *eugov_attributes[] = {
 	&up_rate_limit_us.attr,
 	&down_rate_limit_us.attr,
 	&iowait_boost_enable.attr,
+	&silver_suspend_max_freq.attr,
+	&gold_suspend_max_freq.attr,
 	&suspend_capacity_factor.attr,
 	NULL
 };
